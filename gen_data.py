@@ -28,11 +28,9 @@ for polarization in ['VV', 'VH']:
         ### LOAD DATA ###
         # Place your data at './Colza_DB/Plot/'
         # E.g.: './Colza_DB/Plot/2018/Orb30_2017_Colza2018/mean_VH_Orb30.csv'
-        filepath1 = './Colza_DB/Plot/' + str(year) + '/Orb' + str(orb) + '_' \
-            + str(year-1) + '_Colza' + str(year) + '/'
-        filepath2 = './Colza_DB/Plot/' + str(year) + '/Orb' + str(orb) + '_' \
-            + str(year) + '_Colza' + str(year) + '/'
-        filename = 'mean_' + polarization + '_Orb' + str(orb) + '.csv'
+        filepath1 = f'./Colza_DB/Plot/{year}/Orb{orb}_{year-1}_Colza{year}/'
+        filepath2 = f'./Colza_DB/Plot/{year}/Orb{orb}_{year}_Colza{year}/'
+        filename = f'mean_{polarization}_Orb{orb}.csv'
 
         # Load csv from year and year-1
         df1 = pd.read_csv(filepath1 + filename, delimiter=';', index_col=0)
@@ -122,18 +120,26 @@ for polarization in ['VV', 'VH']:
     ### MERGE POLARIZATIONS ###
     X.append(allOrbs_df.to_numpy())
 
+### NDVI DATA ###
+print('\ADDING NDVI DATA')
+filepath1 = f'./Colza_DB/Plot/{year}/NDVI/ndvi{year-1}_wgs84_Cipan{year}'
+filepath2 = f'./Colza_DB/Plot/{year}/NDVI/ndvi{year}_wgs84_Cipan{year}'
+filename = f'mean_ndvi_wgs84_ndvi_wgs84.csv'
+# Load csv from year and year-1
+df1 = pd.read_csv(filepath1 + filename, delimiter=';', index_col=0)
+df2 = pd.read_csv(filepath2 + filename, delimiter=';', index_col=0)
+
+#### NUMPY DATA ###
 X = np.stack(X, axis=-1)
 # X = 10*np.log10(X) # Convert to dB
 print(f'Final data dimension: {X.shape}')
-
-### NDVI DATA ###
 
 ### LABELS ###
 print('\nTREATING LABELS')
 # Place your data at './Colza_DB/ID/'
 # E.g.: './Colza_DB/ID/gid_5000_2018.csv'
 filepath = './Colza_DB/ID/'
-filename = 'gid_5000_' + str(year) + '.csv'
+filename = f'gid_5000_{year}.csv'
 gid_all = pd.read_csv(filepath + filename, delimiter=',', index_col=1)
 print(f'Total listed samples: {gid_all.shape[0]}')
 # Filter rows corresponding to default indexes
@@ -165,3 +171,6 @@ if dup_idx[0].size > 0:
     gid = gid.loc[~gid.index.duplicated(keep='first')]
 
 y = gid["CODE_CULTU"].to_numpy()
+
+### SAVE DATA ###
+np.savez('Colza_DB/Colza_data', X=X, y=y)
