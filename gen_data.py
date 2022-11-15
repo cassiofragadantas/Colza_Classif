@@ -145,12 +145,13 @@ if show_plots:
     # Full data
     plt.figure()
     class_counts = gid_all["CODE_CULTU"].value_counts()
-    class_counts[1:20].plot.bar()
+    class_counts[:20].plot.bar()
     plt.title(
         f'Histogram of more common classes (20 out of {len(class_counts)})')
     # Filtered data
     plt.figure()
-    gid["CODE_CULTU"].value_counts().plot.bar()
+    class_counts = gid_all["CODE_CULTU"].value_counts()
+    class_counts[:20].plot.bar()
     plt.title(
         f'Histogram of classes on available data')
 
