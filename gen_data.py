@@ -240,7 +240,7 @@ for polarization in ['VV', 'VH']:
     print(f'{missing_ratio}% missing data remaining.')
 
     ### STACKING POLARIZATIONS ###
-    print('\nSTACKING POLARIZATIONS')
+    print('\nStacking polarizations...')
     if SAR_index.empty:
         SAR_index = allOrbs_df.index  # Default indexes for comparison
     else:
