@@ -303,3 +303,10 @@ y = gid["CODE_CULTU"].to_numpy()
 ### SAVE DATA ###
 np.savez(f'Colza_DB/Colza_data_{year}', X_SAR=X_SAR,
          X_NDVI=X_NDVI, y=y, id_parcels=SAR_index)
+
+
+# if show_plots:
+#     import seaborn as sns
+#     sns.lineplot(x='variable', y='value',
+#                  data=pd.melt(allOrbs_df.loc[y == "CZH"]))
+#     allOrbs_df.var() # Veeery small! Impressive
