@@ -43,11 +43,12 @@ def trainModel(model, train, n_epochs, loss_fn, optimizer, device):
 
         labels = np.concatenate(labels, axis=0)
         pred_all = np.concatenate(pred_all, axis=0)
+        f1 = f1_score(pred_all, labels, average=None)
 
         print(f"Epoch {e}:",
               f"Avg loss={train_loss/len(train):.4f},",
               f"Accuracy={(100*correct/len(train.dataset)):.1f}%,",
-              f"F1={f1_score(pred_all, labels, average='macro'):.3f} ")
+              f"F1={f1.mean():.3f} (per class {f1[0]:.2f}, {f1[1]:.2f})")
 
         # f1_valid = prediction(model, valid, device)
         # if f1_valid > best_validation:
@@ -73,11 +74,12 @@ def testModel(model, test, loss_fn):
 
     labels = np.concatenate(labels, axis=0)
     pred_all = np.concatenate(pred_all, axis=0)
+    f1 = f1_score(pred_all, labels, average=None)
 
     print(f"\nTest Error:",
           f"Avg loss={test_loss/len(test):.4f},",
           f"Accuracy={(100*correct/len(test.dataset)):.1f}%,",
-          f"F1={f1_score(pred_all, labels, average='macro'):.3f} ")
+          f"F1={f1.mean():.3f} (per class {f1[0]:.2f}, {f1[1]:.2f})")
 
 
 def main(argv):
