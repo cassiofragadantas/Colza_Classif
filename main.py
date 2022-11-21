@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 
 from model import MLP  # , TempCNN
 
+from sklearn import metrics
+
 
 def trainModel(model, train, n_epochs, loss_fn, optimizer, device):
     model.train()
@@ -36,10 +38,14 @@ def trainModel(model, train, n_epochs, loss_fn, optimizer, device):
 
             # Metrics
             train_loss += loss.item()
-            correct += (pred.argmax(1) ==
-                        y_batch).type(torch.float).sum().item()
             labels.append(y_batch)  # .detach().numpy()
-            pred_all.append(pred.argmax(1))
+            if pred.squeeze().ndimension() == 1:  # Binary
+                correct += ((pred > 0.5).squeeze() == y_batch).sum().item()
+                pred_all.append(pred > 0.5)
+            else:  # One-hot
+                correct += (pred.argmax(1) ==
+                            y_batch).type(torch.float).sum().item()
+                pred_all.append(pred.argmax(1))
 
         labels = np.concatenate(labels, axis=0)
         pred_all = np.concatenate(pred_all, axis=0)
@@ -66,11 +72,16 @@ def testModel(model, test, loss_fn):
     with torch.no_grad():
         for x_batch, y_batch in test:
             pred = model(x_batch)
+
+            # Metrics
             test_loss += loss_fn(pred.squeeze(), y_batch).item()
-            correct += (pred.argmax(1) ==
-                        y_batch).type(torch.float).sum().item()
-            labels.append(y_batch)  # .detach().numpy()
-            pred_all.append(pred.argmax(1))
+            labels.append(y_batch)
+            if pred.squeeze().ndimension() == 1:  # Binary
+                correct += ((pred > 0.5).squeeze() == y_batch).sum().item()
+                pred_all.append(pred > 0.5)
+            else:  # One-hot
+                correct += (pred.argmax(1) == y_batch).sum().item()
+                pred_all.append(pred.argmax(1))
 
     labels = np.concatenate(labels, axis=0)
     pred_all = np.concatenate(pred_all, axis=0)
@@ -80,6 +91,8 @@ def testModel(model, test, loss_fn):
           f"Avg loss={test_loss/len(test):.4f},",
           f"Accuracy={(100*correct/len(test.dataset)):.1f}%,",
           f"F1={f1.mean():.3f} (per class {f1[0]:.2f}, {f1[1]:.2f})")
+
+    return pred_all
 
 
 def main(argv):
@@ -127,14 +140,20 @@ def main(argv):
     optimizer = torch.optim.Adam(
         model.parameters(), lr=1e-5, weight_decay=1e-6)
 
-    # loss = nn.BCELoss().to(device) # requires y_train as Float not Long
+    # loss = nn.BCELoss().to(device)  # requires y_train as Float not Long
     loss = nn.CrossEntropyLoss().to(device)
 
     trainModel(model, train_dataloader, n_epochs, loss, optimizer, device)
 
-    testModel(model, test_dataloader, loss)
+    y_pred = testModel(model, test_dataloader, loss)
 
     torch.save(model.state_dict(), 'MLP_weights')
+
+    # Metrics
+    confusion_matrix = metrics.confusion_matrix(y_test, y_pred)
+    metrics.ConfusionMatrixDisplay(
+        confusion_matrix=confusion_matrix, display_labels=[False, True]).plot()
+    plt.show()
 
     # print( model.parameters() )
     # exit()
