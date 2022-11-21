@@ -31,5 +31,5 @@ class MLP(nn.Module):
         output = self.layer1(output)
         output = self.layer2(output)
         output = self.cl(output)
-        return F.softmax(output, dim=1)
+        return output
         # return nn.Sigmoid()(output)
