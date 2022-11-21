@@ -69,6 +69,7 @@ date_mask = (df.columns >= str(year-1) + '-10-01') \
 df = df.loc[:, date_mask]
 
 # Missing data visualization
+X_NDVI = df.to_numpy()
 zeros_per_row = np.count_nonzero(X_NDVI, axis=1)
 zeros_per_column = np.count_nonzero(X_NDVI, axis=0)
 missing_ratio = zeros_per_row.sum()/X_NDVI.size
