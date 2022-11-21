@@ -1,6 +1,7 @@
 
 import sys
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
@@ -96,9 +97,9 @@ def testModel(model, test, loss_fn):
 
 
 def main(argv):
-    year = int(argv[1])
+    year = int(argv[1]) if len(argv) > 1 else 2018
     n_classes = 2
-    n_epochs = 100
+    n_epochs = 50
 
     torch.manual_seed(0)
     # np.random.seed(0)
@@ -150,10 +151,16 @@ def main(argv):
     torch.save(model.state_dict(), 'MLP_weights')
 
     # Metrics
-    confusion_matrix = metrics.confusion_matrix(y_test, y_pred)
+    cm = metrics.confusion_matrix(y_test, y_pred)
+    cm_normalized = cm.astype(float) / cm.sum(axis=1)[:, np.newaxis]
     metrics.ConfusionMatrixDisplay(
-        confusion_matrix=confusion_matrix, display_labels=[False, True]).plot()
+        confusion_matrix=cm_normalized, display_labels=[False, True]).plot()
     plt.show()
+    # False positive breakdown
+    y_test_multi = y_multi[idx_test]
+    false_pos = y_test_multi[(y_pred == True) & (y_test_multi != 'CZH')]
+    pd.Series(false_pos).value_counts(sort=True).plot(kind='bar')
+    plt.title(f'Distribution of false positives (total of {len(false_pos)})')
 
     # print( model.parameters() )
     # exit()
