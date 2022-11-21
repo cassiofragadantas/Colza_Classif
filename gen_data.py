@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 # TODO: instead of manually choosing year, orb and polarization,
 # just scan the folder and treat the whole data
 
-year = 2018  # Year of interest. Options are 2018, ..., 2020
+year = 2019  # Year of interest. Options are 2018, ..., 2020
 show_plots = True
 interpolate = True
 
@@ -302,8 +302,9 @@ if show_plots:
 y = gid["CODE_CULTU"].to_numpy()
 
 ### SAVE DATA ###
-np.savez(f'Colza_DB/Colza_data_{year}', X_SAR=X_SAR,
-         X_NDVI=X_NDVI, y=y, id_parcels=SAR_index)
+np.savez(f'Colza_DB/Colza_data_{year}',
+         X_SAR=X_SAR, X_NDVI=X_NDVI, y=y, id_parcels=SAR_index,
+         dates_SAR=allOrbs_df.columns, dates_NDVI=NDVI_df.columns)
 
 
 # if show_plots:
