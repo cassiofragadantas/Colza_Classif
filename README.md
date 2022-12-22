@@ -9,3 +9,4 @@ This is a **work in progress** repository.
 - Confusion matrix
 - Spacialized cross validation
 - Temporal transfer (train and test in different years)
+- Multiclass?
