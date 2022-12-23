@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 # OK - Histogramme des classes.
 # OK - Search labels correspondance (using id)
 
-year = 2020  # Year of interest. Options are 2018, ..., 2020
+year = 2020 # Year of interest. Options are 2018, ..., 2020
 join = 'inner' # pandas join type (inner or outer)
 show_plots = True
 interpolate = True
@@ -301,6 +301,16 @@ for polarization in ['VV', 'VH']:
         allOrbs_df = allOrbs_df.interpolate(method='time', axis=1)
         allOrbs_df = allOrbs_df.interpolate(method='time', axis=1,
                                             limit_direction='backward')
+
+    if grid_mean:
+        allOrbs_df_grid = allOrbs_df_grid.replace(0, np.nan)
+        missing_ratio = allOrbs_df_grid.isnull().sum().sum()/allOrbs_df_grid.size
+        if interpolate:
+            print(f'grid mean: {missing_ratio*100:.2f}% missing data.')
+            allOrbs_df_grid = allOrbs_df_grid.interpolate(method='time', axis=1)
+            allOrbs_df_grid = allOrbs_df_grid.interpolate(method='time', axis=1,
+                                                limit_direction='backward')
+
     # Missing data
     allNaN = allOrbs_df.isnull().all(1)
     if any(allNaN):
