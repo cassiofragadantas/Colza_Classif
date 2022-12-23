@@ -5,19 +5,18 @@ from matplotlib import pyplot as plt
 # TODO list:
 # OK -  Merge VV VH, merge orbites
 # OK - Stats sur les zéros, enlever?
-# - Remove grid average
+# OK - Remove grid average
 # OK - NDVI
 # OK - Labels
 # OK - Histogramme des classes.
 # OK - Search labels correspondance (using id)
 
-# TODO: instead of manually choosing year, orb and polarization,
-# just scan the folder and treat the whole data
-
-year = 2019  # Year of interest. Options are 2018, ..., 2020
+year = 2020  # Year of interest. Options are 2018, ..., 2020
 join = 'inner' # pandas join type (inner or outer)
 show_plots = True
 interpolate = True
+grid_mean = True
+NDVI_trim_columns = False # Trim out all-zero columns
 
 
 def check_duplicates(df, id='csv'):
@@ -42,6 +41,30 @@ def check_duplicates(df, id='csv'):
 
     return df
 
+def get_grid_mean(df,gridmean,id):
+    df_ID_g = gid.loc[df.index]['ID_g']
+    if all(df_ID_g.isin(gridmean.index)):
+        print(f'\tGREAT! All grid indexes found in the grid mean at {id}.')
+    else:
+        missing_id_g = df_ID_g[~df_ID_g.isin(gridmean.index)].unique()
+        missing_parcel_id = gid.loc[gid['ID_g'].isin(missing_id_g)].index
+        print(f'\tISSUE! {len(missing_id_g)} grid indexes missing in the grid mean at {id}.')
+        print(f'\t\tMissing grid indexes {missing_id_g} ' + \
+              f'with {missing_parcel_id.shape} associated parcels (to be removed).')
+        df=df[~df.index.isin(missing_parcel_id)]
+        df_ID_g = gid.loc[df.index]['ID_g']
+
+    gridmean = gridmean.loc[df_ID_g]
+    gridmean.set_index(df.index, inplace=True)
+
+    return df, gridmean
+
+
+# Load id correspondance (parcel and grid)
+print('\nGetting grid-parcel id correspondance')
+gid = pd.read_csv(
+    f'./Colza_DB/ID/gid_5000_{year}.csv', delimiter=',', index_col=1)
+gid = check_duplicates(gid,f'gid_5000_{year}') # Remove duplicates
 
 ### NDVI DATA ###
 print('\n===== ADDING NDVI DATA =====\n')
@@ -104,18 +127,27 @@ if show_plots:
 
 ### INTERPOLATION ###
 df = df.replace(0, np.nan)
-if interpolate:
-    print('\nINTERPOLATING DATA THROUGH TIME')
-    df = df.interpolate(method='time', axis=1)
-    df = df.interpolate(method='time', axis=1,
-                        limit_direction='backward')
-# Missing data
+# Remove all-zero rows (cannot be interpolated)
 allNaN = df.isnull().all(1)
 if any(allNaN):
     print(f'WEIRD! {allNaN.sum()} all-NaN rows. Removing...')
     df = df.loc[~allNaN]
 else:
-    print('GREAT! No all-NaN rows after interpolation.')    
+    print('GREAT! No all-NaN rows.')
+# Remove all-zero columns (optional)
+if NDVI_trim_columns:
+    allNaN = df.isnull().all(0)
+    if any(allNaN):
+        print(f'(OPTIONAL) Removing {allNaN.sum()} all-NaN columns...')
+        df = df.loc[:,~allNaN]
+    else:
+        print('GREAT! No all-NaN columns.')
+# Interpolate
+if interpolate:
+    print('\nINTERPOLATING DATA THROUGH TIME')
+    df = df.interpolate(method='time', axis=1)
+    df = df.interpolate(method='time', axis=1,
+                        limit_direction='backward')
 missing_ratio = sum(df.isnull().sum())/df.size
 print(f'{missing_ratio*100:.2f}% missing data remaining.')
 
@@ -130,6 +162,8 @@ default_idx = pd.DataFrame().index
 SAR_index = pd.DataFrame().index
 for polarization in ['VV', 'VH']:
     allOrbs_df = pd.DataFrame()
+    if grid_mean: 
+        allOrbs_df_grid = pd.DataFrame()
 
     print(f'\n----- TYPE {polarization} -----')
 
@@ -152,17 +186,6 @@ for polarization in ['VV', 'VH']:
         df2 = pd.read_csv(path + path2 + filename, delimiter=',', index_col=0)
         print(f'\t{year-1} data dimensions {df1.shape}')
         print(f'\t{year} data dimensions {df2.shape}')
-        # Load grid mean data
-        path = f'./Colza_DB/RPG_grid_mean/'
-        filename = f'mean_{polarization}_Orb{orb}.csv'
-        gridmean1 = pd.read_csv(path+path1+filename,
-                                delimiter=';', index_col=0)
-        gridmean2 = pd.read_csv(path+path2+filename,
-                                delimiter=';', index_col=0)
-        # Load id correspondance (parcel and grid)
-        gid = pd.read_csv(
-            f'./Colza_DB/ID/gid_5000_{year}.csv', delimiter=',', index_col=1)
-        gid = gid.loc[~gid.index.duplicated(keep='first')]  # Remove duplicates
 
         ### SANITY CHECKS ###
         print('\n\tSanity checks:')
@@ -176,23 +199,18 @@ for polarization in ['VV', 'VH']:
 
 
         #### GET GRID MEAN ###
-        print('\n\tGetting grid mean...')
-        df1_ID_g = gid.loc[df1.index]['ID_g']
-        df2_ID_g = gid.loc[df2.index]['ID_g']
-        if all(df1_ID_g.isin(gridmean1.index)):
-            gridmean1.loc[df1_ID_g]
-            print(f'\tGREAT! All grid indexes found in the grid mean at {path1}.')
-        else:
-            missing_id_g = df1_ID_g[~df1_ID_g.isin(gridmean1.index)].unique()
-            print(f'\tISSUE! {len(missing_id_g)} grid indexes missing in the grid mean at {path1}.')
-            print(f'\t\tMissing indexes {missing_id_g}')
-        if all(df2_ID_g.isin(gridmean2.index)):
-            gridmean2.loc[df2_ID_g]
-            print(f'\tGREAT! All grid indexes found in the grid mean at {path2}.')
-        else:
-            missing_id_g = df2_ID_g[~df2_ID_g.isin(gridmean2.index)].unique()
-            print(f'\tISSUE! {len(missing_id_g)} grid indexes missing in the grid mean at {path2}.')
-            print(f'\t\tMissing indexes {missing_id_g}')
+        if grid_mean:
+            print('\n\tGetting grid mean...')
+            # Load grid mean data
+            path = f'./Colza_DB/RPG_grid_mean/'
+            filename = f'mean_{polarization}_Orb{orb}.csv'
+            gridmean1 = pd.read_csv(path+path1+filename,
+                                    delimiter=';', index_col=0)
+            gridmean2 = pd.read_csv(path+path2+filename,
+                                    delimiter=';', index_col=0)
+
+            df1, df1_grid = get_grid_mean(df1,gridmean1,path1)
+            df2, df2_grid = get_grid_mean(df2,gridmean2,path2)
 
         ### CONCATENATE AND TRIM MONTHS OF INTEREST ###
         print(f'\n\tConcatenating data from {year-1} and {year} ({join})...')
@@ -205,12 +223,21 @@ for polarization in ['VV', 'VH']:
         date_mask = (df.columns >= str(year-1) + '-10-01') \
             & (df.columns < str(year)+'-08-01')
         df = df.loc[:, date_mask]
+        print(f'\tData dimensions: ', df.shape)
 
-        # Convert to Numpy and to dB
+        if grid_mean:
+            # Concatenate year and year-1
+            df_grid = pd.concat([df1_grid, df2_grid], axis=1, join=join)
+            # Sort by date (should already be sorted)
+            df_grid = df_grid.sort_index(axis=1, ascending=True)
+            # Keeping only months of interest (Oct/N-1 to July/N)
+            df_grid.columns = pd.to_datetime(df_grid.columns)
+            date_mask = (df_grid.columns >= str(year-1) + '-10-01') \
+                & (df_grid.columns < str(year)+'-08-01')
+            df_grid = df_grid.loc[:, date_mask]
+
+        ### EVALUATE MISSING DATA (ZEROS) ###
         data = df.to_numpy()
-        print(f'\tData dimensions: ', data.shape)
-
-        ### HANDLE MISSING DATA (ZEROS) ###
         zeros_per_row = np.count_nonzero(data == 0, axis=1) + np.count_nonzero(np.isnan(data), axis=1)
         zeros_per_column = np.count_nonzero(data == 0, axis=0) + np.count_nonzero(np.isnan(data), axis=0)
         missing_ratio = zeros_per_row.sum()/data.size
@@ -242,16 +269,27 @@ for polarization in ['VV', 'VH']:
                 print(f'\tWEIRD! Indexes do not match among orbits! Joining ({join})')
             allOrbs_df = pd.concat([allOrbs_df, df], axis=1, join=join)
             allOrbs_df = allOrbs_df.sort_index(axis=1, ascending=True)
+
+        if grid_mean:
+            if allOrbs_df_grid.empty:
+                allOrbs_df_grid = df_grid
+            else:
+                if not df_grid.index.equals(allOrbs_df_grid.index):
+                    print(f'\tWEIRD! Indexes do not match for grid mean! Joining ({join})')
+                allOrbs_df_grid = pd.concat([allOrbs_df_grid, df_grid], axis=1, join=join)
+                allOrbs_df_grid = allOrbs_df_grid.sort_index(axis=1, ascending=True)
+
         print(f'\tAll-orbits dimensions: {allOrbs_df.shape}')
 
     # Harmonize indexes with NDVI data
     print(f'\nRestricting SAR data to NDVI indexes')
-    if all(NDVI_index.isin(allOrbs_df.index)):
-        allOrbs_df = allOrbs_df.loc[NDVI_index]
-    else:
+    if not all(NDVI_index.isin(allOrbs_df.index)):
         nb_missing = sum(~NDVI_index.isin(allOrbs_df.index))
         print(f'{nb_missing} NDVI index missing on SAR data. Taking intersection.')
-        allOrbs_df = allOrbs_df.loc[NDVI_index.intersection(allOrbs_df.index)]
+    allOrbs_df = allOrbs_df.loc[NDVI_index.intersection(allOrbs_df.index)]
+    if grid_mean:
+        allOrbs_df_grid = allOrbs_df_grid.loc[NDVI_index.intersection(allOrbs_df_grid.index)]
+
     print(f'All-orbits dimensions: {allOrbs_df.shape}')
 
     ### INTERPOLATION ###
@@ -268,6 +306,8 @@ for polarization in ['VV', 'VH']:
     if any(allNaN):
         print(f'WEIRD! {allNaN.sum()} all-NaN rows. Removing...')
         allOrbs_df = allOrbs_df.loc[~allNaN]
+        if grid_mean:
+            allOrbs_df_grid = allOrbs_df_grid.loc[~allNaN]
     else:
         print('GREAT! No all-NaN rows after interpolation.')
     missing_ratio = sum(allOrbs_df.isnull().sum())/allOrbs_df.size
@@ -283,11 +323,15 @@ for polarization in ['VV', 'VH']:
             print(f'WEIRD! Indexes do not match between polarizations !')
             print(f'Taking intersection of size {allOrbs_df.index.intersection(SAR_index).shape}')
             allOrbs_df = allOrbs_df.loc[allOrbs_df.index.intersection(SAR_index)]
+            if grid_mean:
+                allOrbs_df_grid = allOrbs_df_grid.loc[allOrbs_df_grid.index.intersection(SAR_index)]
             idx = SAR_index.isin(allOrbs_df.index.intersection(SAR_index))
             for i in range(len(X_SAR)): # applying intersection to previous polarizations
                 X_SAR[i] = X_SAR[i][idx]
             SAR_index = allOrbs_df.index.intersection(SAR_index)
     X_SAR.append(allOrbs_df.to_numpy())
+    if grid_mean:
+        X_SAR.append(allOrbs_df.subtract(allOrbs_df_grid).to_numpy())
 
 print(f'\n-------------------------------')
 
