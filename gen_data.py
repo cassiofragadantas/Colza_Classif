@@ -17,7 +17,7 @@ show_plots = True
 interpolate = True
 grid_mean = True
 NDVI_trim_columns = False # Trim out all-zero columns
-
+saturate_outliers = True
 
 def check_duplicates(df, id='csv'):
     # Duplicate rows
@@ -126,7 +126,7 @@ if show_plots:
     plt.xlabel('Time index'), plt.ylabel('Sample index')
 
 ### INTERPOLATION ###
-df = df.replace(0, np.nan)
+df = df.replace([0, np.inf, -np.inf], np.nan)
 # Remove all-zero rows (cannot be interpolated)
 allNaN = df.isnull().all(1)
 if any(allNaN):
@@ -293,7 +293,7 @@ for polarization in ['VV', 'VH']:
     print(f'All-orbits dimensions: {allOrbs_df.shape}')
 
     ### INTERPOLATION ###
-    allOrbs_df = allOrbs_df.replace(0, np.nan)
+    allOrbs_df = allOrbs_df.replace([0, np.inf, -np.inf], np.nan)
     missing_ratio = allOrbs_df.isnull().sum().sum()/allOrbs_df.size
     if interpolate:
         print('\nINTERPOLATING DATA THROUGH TIME')
@@ -303,7 +303,9 @@ for polarization in ['VV', 'VH']:
                                             limit_direction='backward')
 
     if grid_mean:
-        allOrbs_df_grid = allOrbs_df_grid.replace(0, np.nan)
+        allOrbs_df_grid = allOrbs_df_grid.replace([0, np.inf, -np.inf], np.nan)
+        # print(f'BIG VALUES REMOVED: {(allOrbs_df_grid.values >= 0.3).sum()/allOrbs_df_grid.size*100}%')
+        allOrbs_df_grid.where(allOrbs_df_grid <= 0.3, np.nan, inplace=True)
         missing_ratio = allOrbs_df_grid.isnull().sum().sum()/allOrbs_df_grid.size
         if interpolate:
             print(f'grid mean: {missing_ratio*100:.2f}% missing data.')
@@ -322,6 +324,9 @@ for polarization in ['VV', 'VH']:
         print('GREAT! No all-NaN rows after interpolation.')
     missing_ratio = sum(allOrbs_df.isnull().sum())/allOrbs_df.size
     print(f'{missing_ratio*100:.2f}% missing data remaining.')
+    if grid_mean:
+        missing_ratio = sum(allOrbs_df_grid.isnull().sum())/allOrbs_df_grid.size
+        print(f'grid_mean: {missing_ratio*100:.2f}% missing data remaining.')
     print(f'All-orbits dimensions: {allOrbs_df.shape}')
 
     ### STACKING POLARIZATIONS ###
@@ -348,6 +353,10 @@ print(f'\n-------------------------------')
 #### SAR DATA ###
 X_SAR = np.stack(X_SAR, axis=-1)
 # X_SAR = 10*np.log10(X_SAR) # Convert to dB
+if saturate_outliers:
+    thresh = np.percentile(np.abs(X_SAR), 99.9)
+    X_SAR[X_SAR > thresh] = thresh
+    X_SAR[X_SAR < -thresh] = -thresh
 print(f'\nFinal SAR data dimension: {X_SAR.shape}')
 
 #### NDVI DATA ###
