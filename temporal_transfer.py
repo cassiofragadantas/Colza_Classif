@@ -41,7 +41,7 @@ def main(argv):
 
     # Pre_process data: rescaling
     x_train = X_SAR[:, 1:-1, :]  # to match test data size
-    x_train = x_train/np.percentile(x_train, 98)
+    x_train = x_train/np.percentile(x_train, 99)
     x_train[x_train > 1] = 1
     x_train = torch.Tensor(x_train)
     # Pre-process labels: binarize with "CZH" as positive class
