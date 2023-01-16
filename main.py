@@ -12,7 +12,7 @@ from sklearn.model_selection import train_test_split
 
 import matplotlib.pyplot as plt
 
-from model import MLP  # , TempCNN
+from model import MLP, TempCNN, Inception, LSTMFCN
 
 from sklearn import metrics
 
@@ -126,6 +126,10 @@ def main(argv):
     y_test = torch.FloatTensor(y_test).long()
     # y_test = F.one_hot(y_test, num_classes=n_classes).float()
 
+    # Permute channel and time dimensions
+    x_train = x_train.permute((0,2,1))
+    x_test = x_test.permute((0,2,1))
+
     train_dataset = TensorDataset(x_train, y_train)  # create your datset
     test_dataset = TensorDataset(x_test, y_test)  # create your datset
 
@@ -135,7 +139,11 @@ def main(argv):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    model = MLP(np.prod(x_train.shape[1:]), n_classes, dropout_rate=.5)
+    # Model choice
+    model = MLP(x_train.shape, n_classes) # 50 epochs is enough
+    # model = TempCNN(n_classes) # 200 epochs
+    # model = Inception(n_classes) # 50 epochs
+    # model = LSTMFCN(n_classes, x_train.shape[-1])
     model.to(device)
 
     optimizer = torch.optim.Adam(
@@ -163,7 +171,6 @@ def main(argv):
     plt.title(f'Distribution of false positives (total of {len(false_pos)})')
 
     # print( model.parameters() )
-    # exit()
 
 
 if __name__ == "__main__":
