@@ -170,7 +170,7 @@ def trainTestModel(model_name,file_path, x_train,x_test,y_train,y_test,dates_tra
 
 def main(argv):
     year = int(argv[1]) if len(argv) > 1 else 2018
-    model_name = argv[2] if len(argv) > 2 else "LTAE"
+    model_name = argv[2] if len(argv) > 2 else "MLP"
 
     n_epochs = 50
 
