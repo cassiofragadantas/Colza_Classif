@@ -1,5 +1,6 @@
-
+import os
 import sys
+import pickle
 import numpy as np
 import pandas as pd
 import torch
@@ -7,17 +8,19 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 import torch.nn.functional as F
 
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, accuracy_score
 from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+
 
 import matplotlib.pyplot as plt
 
-from model import MLP, TempCNN, Inception, LSTMFCN
+from model import MLP, TempCNN, Inception, LSTMFCN, LTAE_clf
 
 from sklearn import metrics
 
 
-def trainModel(model, train, n_epochs, loss_fn, optimizer, device):
+def trainModel(model, train, n_epochs, loss_fn, optimizer, device, dates=None):
     model.train()
 
     for e in range(n_epochs):
@@ -30,7 +33,11 @@ def trainModel(model, train, n_epochs, loss_fn, optimizer, device):
             y_batch = y_batch.to(device)
 
             # Compute prediction and loss
-            pred = model(x_batch)
+            if model.__class__.__name__ == "LTAE_clf":
+                pred = model(x_batch, dates)
+            else:
+                pred = model(x_batch)
+            
             loss = loss_fn(pred.squeeze(), y_batch)
 
             # Backpropagation
@@ -66,13 +73,16 @@ def trainModel(model, train, n_epochs, loss_fn, optimizer, device):
         sys.stdout.flush()
 
 
-def testModel(model, test, loss_fn):
+def testModel(model, test, loss_fn, dates=None):
 
     test_loss, correct = 0, 0
     labels, pred_all = [], []  # for f1-score
     with torch.no_grad():
         for x_batch, y_batch in test:
-            pred = model(x_batch)
+            if model.__class__.__name__ == "LTAE_clf":
+                pred = model(x_batch, dates)
+            else:
+                pred = model(x_batch)
 
             # Metrics
             test_loss += loss_fn(pred.squeeze(), y_batch).item()
@@ -95,10 +105,73 @@ def testModel(model, test, loss_fn):
 
     return pred_all
 
+def trainTestModel(model_name,file_path, x_train,x_test,y_train,y_test,dates_train, dates_test=None, n_epochs=50, batch_size=16):
+    n_classes = 2
+
+    if dates_test is None:
+        dates_test = dates_train
+
+    train_dataset = TensorDataset(x_train, y_train)  # create your datset
+    test_dataset = TensorDataset(x_test, y_test)  # create your datset
+
+    train_dataloader = DataLoader(
+        train_dataset, shuffle=True, batch_size=batch_size)
+    test_dataloader = DataLoader(test_dataset, shuffle=False, batch_size=2048)
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    # Select model
+    if model_name == 'MLP':
+        model = MLP(x_train.shape, n_classes)
+    elif model_name == 'TempCNN':
+        model = TempCNN(n_classes)
+    elif model_name == 'Inception':
+        model = Inception(n_classes)
+    elif model_name == 'LSTM-FCN':
+        model = LSTMFCN(n_classes, x_train.shape[-1])
+    elif model_name == 'LTAE':
+        model = LTAE_clf(x_train.shape, n_classes, dates=dates_train)
+    elif model_name == 'RF':
+        model = RandomForestClassifier() # n_estimators=1000
+
+    # loss = nn.BCELoss().to(device)  # requires y_train as Float not Long
+    loss = nn.CrossEntropyLoss().to(device)
+
+    # Train model (if not previously done)
+    if not os.path.exists(file_path):
+
+        if model_name == 'RF':
+            model.fit(x_train.reshape(x_train.shape[0],-1), y_train)
+            pickle.dump(model, open(file_path, "wb"))
+        else:
+            model.to(device)            
+            optimizer = torch.optim.Adam(model.parameters(), lr=1e-5, weight_decay=1e-6)
+            trainModel(model, train_dataloader, n_epochs, loss, optimizer, device, dates_train)
+            torch.save(model.state_dict(), file_path)
+    else:
+        print(f'\n>> Loading previously-learned {model_name} model weights.\n')
+        if model_name == 'RF': 
+            model = pickle.load(open(file_path, "rb"))
+        else:
+            model.load_state_dict(torch.load(file_path))
+
+    # Test model
+    if model_name == 'RF':
+        y_pred = model.predict(x_test.reshape(x_test.shape[0],-1))
+        f1 = f1_score(y_pred, y_test, average=None)
+        accuracy = accuracy_score(y_pred, y_test)
+
+        print(f"\nAccuracy={(100*accuracy):.1f}%,",
+                f"F1={f1.mean():.3f} (per class {f1[0]:.2f}, {f1[1]:.2f})")         
+    else:    
+        y_pred = testModel(model, test_dataloader, loss, dates_test)
+
+    return y_pred
 
 def main(argv):
     year = int(argv[1]) if len(argv) > 1 else 2018
-    n_classes = 2
+    model_name = argv[2] if len(argv) > 2 else "LTAE"
+
     n_epochs = 50
 
     torch.manual_seed(0)
@@ -106,6 +179,8 @@ def main(argv):
 
     dataset = np.load(f'Colza_DB/Colza_data_{year}.npz', allow_pickle=True)
     X_SAR, X_NDVI, y_multi, id_parcel = dataset["X_SAR"], dataset["X_NDVI"], dataset["y"], dataset["id_parcels"]
+
+    dates = dataset["dates_SAR"]
 
     # Pre-process labels: binarize with "CZH" as positive class
     y = np.zeros(y_multi.shape)
@@ -130,33 +205,64 @@ def main(argv):
     x_train = x_train.permute((0,2,1))
     x_test = x_test.permute((0,2,1))
 
-    train_dataset = TensorDataset(x_train, y_train)  # create your datset
-    test_dataset = TensorDataset(x_test, y_test)  # create your datset
+    file_path = "model_weights/" + model_name + f'_{year}part_{n_epochs}ep_{x_train.shape[-2]}ch'
+    y_pred = trainTestModel(model_name,file_path,x_train,x_test,y_train,y_test,dates,dates,n_epochs,batch_size)
 
-    train_dataloader = DataLoader(
-        train_dataset, shuffle=True, batch_size=batch_size)
-    test_dataloader = DataLoader(test_dataset, shuffle=False, batch_size=2048)
+    # train_dataset = TensorDataset(x_train, y_train)  # create your datset
+    # test_dataset = TensorDataset(x_test, y_test)  # create your datset
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    # train_dataloader = DataLoader(
+    #     train_dataset, shuffle=True, batch_size=batch_size)
+    # test_dataloader = DataLoader(test_dataset, shuffle=False, batch_size=2048)
 
-    # Model choice
-    model = MLP(x_train.shape, n_classes) # 50 epochs is enough
-    # model = TempCNN(n_classes) # 200 epochs
-    # model = Inception(n_classes) # 50 epochs
-    # model = LSTMFCN(n_classes, x_train.shape[-1])
-    model.to(device)
+    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=1e-5, weight_decay=1e-6)
 
-    # loss = nn.BCELoss().to(device)  # requires y_train as Float not Long
-    loss = nn.CrossEntropyLoss().to(device)
+    # # Select model
+    # if model_name == 'MLP':
+    #     model = MLP(x_train.shape, n_classes)
+    # elif model_name == 'TempCNN':
+    #     model = TempCNN(n_classes)
+    # elif model_name == 'Inception':
+    #     model = Inception(n_classes)
+    # elif model_name == 'LSTM-FCN':
+    #     model = LSTMFCN(n_classes, x_train.shape[-1])
+    # elif model_name == 'LTAE':
+    #     model = LTAE_clf(x_train.shape, n_classes, dates=dates)
+    # elif model_name == 'RF':
+    #     model = RandomForestClassifier() # n_estimators=1000
 
-    trainModel(model, train_dataloader, n_epochs, loss, optimizer, device)
 
-    y_pred = testModel(model, test_dataloader, loss)
+    # # Train model (if not previously done)
+    # if not os.path.exists(file_path):
 
-    torch.save(model.state_dict(), 'MLP_weights')
+    #     if model_name == 'RF':
+    #         model.fit(x_train.reshape(x_train.shape[0],-1), y_train)
+    #         pickle.dump(model, open(file_path, "wb"))
+    #     else:
+    #         model.to(device)            
+    #         # loss = nn.BCELoss().to(device)  # requires y_train as Float not Long
+    #         loss = nn.CrossEntropyLoss().to(device)
+    #         optimizer = torch.optim.Adam(model.parameters(), lr=1e-5, weight_decay=1e-6)
+    #         trainModel(model, train_dataloader, n_epochs, loss, optimizer, device, dates)
+    #         torch.save(model.state_dict(), file_path)
+    # else:
+    #     print(f'\n>> Loading previously-learned {model_name} model weights.\n')
+    #     if model_name == 'RF': 
+    #         model = pickle.load(open(file_path, "rb"))
+    #     else:
+    #         model.load_state_dict(torch.load(file_path))
+
+    # # Test model
+    # if model_name == 'RF':
+    #     y_pred = model.predict(x_test.reshape(x_test.shape[0],-1))
+    #     f1 = f1_score(y_pred, y_test, average=None)
+    #     accuracy = accuracy_score(y_pred, y_test)
+
+    #     print(f"\nAccuracy={(100*accuracy):.1f}%,",
+    #             f"F1={f1.mean():.3f} (per class {f1[0]:.2f}, {f1[1]:.2f})")         
+    # else:    
+    #     y_pred = testModel(model, test_dataloader, loss, dates)
 
     # Metrics
     cm = metrics.confusion_matrix(y_test, y_pred)
