@@ -38,16 +38,34 @@ def main(argv):
     # Training data
     dataset = np.load(
         f'Colza_DB/Colza_data_{year_train}.npz', allow_pickle=True)
-    X_SAR, X_NDVI, y_multi_train = dataset["X_SAR"], dataset["X_NDVI"], dataset["y"]
+    X_SAR_train, X_NDVI_train, y_multi_train = dataset["X_SAR"], dataset["X_NDVI"], dataset["y"]
     id_parcels_train, dates_SAR_train, dates_NDVI_train = \
         dataset["id_parcels"], dataset["dates_SAR"], dataset["dates_NDVI"]
 
-    # Pre_process data: rescaling
+    # Test data
+    dataset = np.load(
+        f'Colza_DB/Colza_data_{year_test}.npz', allow_pickle=True)
+    X_SAR_test, X_NDVI_test, y_multi_test = dataset["X_SAR"], dataset["X_NDVI"], dataset["y"]
+    id_parcel_test, dates_SAR_test, dates_NDVI_test = \
+        dataset["id_parcels"], dataset["dates_SAR"], dataset["dates_NDVI"]
+
+
+    # Pre_process data: resize
+    # 2018: SAR (80288, 152, 4), NDVI (80288, 78)
+    # 2019: SAR (72506, 135, 4), NDVI (72506, 80)
+    # 2020: SAR (97971, 150, 4), NDVI (97971, 71)
     if model_name != 'LTAE':
-        X_SAR = X_SAR[:, 1:-1, :]  # to match test data size
+        diff = X_SAR_train.shape[1] - X_SAR_test.shape[1]
+        if diff > 0:
+            X_SAR_train = X_SAR_train[:, (diff//2):-(diff-diff//2), :]
+        elif diff < 0:
+            X_SAR_test = X_SAR_test[:, -(diff//2):(diff-diff//2), :]
+    # if model_name != 'LTAE':
+    #     X_SAR_train = X_SAR_train[:, 1:-1, :]  # to match test data size
     if not grid_mean:
-        X_SAR = X_SAR[:, :, (0, 2)]  # Remove VV-grid_mean and VH-grid_meanx
-    x_train = X_SAR/np.percentile(X_SAR, 99)
+        X_SAR_train = X_SAR_train[:, :, (0, 2)]  # Remove VV-grid_mean and VH-grid_meanx
+    # Pre_process data: rescale
+    x_train = X_SAR_train/np.percentile(X_SAR_train, 99)
     x_train[x_train > 1] = 1
     x_train = torch.Tensor(x_train)
     # Pre-process labels: binarize with "CZH" as positive class
@@ -58,17 +76,11 @@ def main(argv):
     # Permute channel and time dimensions
     x_train = x_train.permute((0,2,1))
 
-    # Test data
-    dataset = np.load(
-        f'Colza_DB/Colza_data_{year_test}.npz', allow_pickle=True)
-    X_SAR, X_NDVI, y_multi_test = dataset["X_SAR"], dataset["X_NDVI"], dataset["y"]
-    id_parcel_test, dates_SAR_test, dates_NDVI_test = \
-        dataset["id_parcels"], dataset["dates_SAR"], dataset["dates_NDVI"]
 
     # Pre_process data: rescaling
     if not grid_mean:
-        X_SAR = X_SAR[:, :, (0, 2)]  # Remove VV-grid_mean and VH-grid_meanx    
-    x_test = X_SAR/np.percentile(X_SAR, 98)
+        X_SAR_test = X_SAR_test[:, :, (0, 2)]  # Remove VV-grid_mean and VH-grid_meanx    
+    x_test = X_SAR_test/np.percentile(X_SAR_test, 98)
     x_test[x_test > 1] = 1
     x_test = torch.Tensor(x_test)  # transform to torch tensor
     # Pre-process labels: binarize with "CZH" as positive class
@@ -80,7 +92,7 @@ def main(argv):
     # Permute channel and time dimensions
     x_test = x_test.permute((0,2,1))
 
-    file_path = "model_weights/" + model_name + f'_{year_train}_{n_epochs}ep_{x_train.shape[-2]}ch'
+    file_path = "model_weights/" + model_name + f'_SAR_{year_train}_{n_epochs}ep_{x_train.shape[-2]}ch'
     y_pred = trainTestModel(model_name,file_path,x_train,x_test,y_train,y_test,dates_SAR_train,dates_SAR_test,n_epochs)
 
     # Metrics

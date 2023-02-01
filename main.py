@@ -205,7 +205,7 @@ def main(argv):
     x_train = x_train.permute((0,2,1))
     x_test = x_test.permute((0,2,1))
 
-    file_path = "model_weights/" + model_name + f'_{year}part_{n_epochs}ep_{x_train.shape[-2]}ch'
+    file_path = "model_weights/" + model_name + f'_SAR_{year}part_{n_epochs}ep_{x_train.shape[-2]}ch'
     y_pred = trainTestModel(model_name,file_path,x_train,x_test,y_train,y_test,dates,dates,n_epochs,batch_size)
 
     # Metrics
