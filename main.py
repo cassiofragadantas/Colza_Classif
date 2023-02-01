@@ -46,14 +46,14 @@ def trainModel(model, train, n_epochs, loss_fn, optimizer, device, dates=None):
 
             # Metrics
             train_loss += loss.item()
-            labels.append(y_batch)  # .detach().numpy()
+            labels.append(y_batch.cpu().detach().numpy())
             if pred.squeeze().ndimension() == 1:  # Binary
                 correct += ((pred > 0.5).squeeze() == y_batch).sum().item()
-                pred_all.append(pred > 0.5)
+                pred_all.append((pred > 0.5).cpu().detach().numpy())
             else:  # One-hot
                 correct += (pred.argmax(1) ==
                             y_batch).type(torch.float).sum().item()
-                pred_all.append(pred.argmax(1))
+                pred_all.append((pred.argmax(1)).cpu().detach().numpy())
 
         labels = np.concatenate(labels, axis=0)
         pred_all = np.concatenate(pred_all, axis=0)
