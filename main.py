@@ -155,7 +155,7 @@ def trainTestModel(model_name,file_path, x_train,x_test,y_train,y_test,dates_tra
         if model_name == 'RF': 
             model = pickle.load(open(file_path, "rb"))
         else:
-            model.load_state_dict(torch.load(file_path))
+            model.load_state_dict(torch.load(file_path, map_location=device))
             model.to(device)
 
     # Test model
