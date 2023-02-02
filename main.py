@@ -73,12 +73,14 @@ def trainModel(model, train, n_epochs, loss_fn, optimizer, device, dates=None):
         sys.stdout.flush()
 
 
-def testModel(model, test, loss_fn, dates=None):
+def testModel(model, test, loss_fn, device, dates=None):
 
     test_loss, correct = 0, 0
     labels, pred_all = [], []  # for f1-score
     with torch.no_grad():
         for x_batch, y_batch in test:
+            x_batch = x_batch.to(device)
+            y_batch = y_batch.to(device)
             if model.__class__.__name__ == "LTAE_clf":
                 pred = model(x_batch, dates)
             else:
@@ -86,13 +88,13 @@ def testModel(model, test, loss_fn, dates=None):
 
             # Metrics
             test_loss += loss_fn(pred.squeeze(), y_batch).item()
-            labels.append(y_batch)
+            labels.append(y_batch.cpu().detach().numpy())
             if pred.squeeze().ndimension() == 1:  # Binary
                 correct += ((pred > 0.5).squeeze() == y_batch).sum().item()
-                pred_all.append(pred > 0.5)
+                pred_all.append((pred > 0.5).cpu().detach().numpy())
             else:  # One-hot
                 correct += (pred.argmax(1) == y_batch).sum().item()
-                pred_all.append(pred.argmax(1))
+                pred_all.append((pred.argmax(1)).cpu().detach().numpy())
 
     labels = np.concatenate(labels, axis=0)
     pred_all = np.concatenate(pred_all, axis=0)
@@ -101,7 +103,7 @@ def testModel(model, test, loss_fn, dates=None):
     print(f"\nTest Error:",
           f"Avg loss={test_loss/len(test):.4f},",
           f"Accuracy={(100*correct/len(test.dataset)):.1f}%,",
-          f"F1={f1.mean():.3f} (per class {f1[0]:.2f}, {f1[1]:.2f})")
+          f"F1={f1.mean():.3f} (per class {f1[0]:.3f}, {f1[1]:.3f})")
 
     return pred_all
 
@@ -154,6 +156,7 @@ def trainTestModel(model_name,file_path, x_train,x_test,y_train,y_test,dates_tra
             model = pickle.load(open(file_path, "rb"))
         else:
             model.load_state_dict(torch.load(file_path))
+            model.to(device)
 
     # Test model
     if model_name == 'RF':
@@ -164,7 +167,7 @@ def trainTestModel(model_name,file_path, x_train,x_test,y_train,y_test,dates_tra
         print(f"\nAccuracy={(100*accuracy):.1f}%,",
                 f"F1={f1.mean():.3f} (per class {f1[0]:.2f}, {f1[1]:.2f})")         
     else:    
-        y_pred = testModel(model, test_dataloader, loss, dates_test)
+        y_pred = testModel(model, test_dataloader, loss, device, dates_test)
 
     return y_pred
 
