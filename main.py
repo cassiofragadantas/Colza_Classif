@@ -61,8 +61,8 @@ def trainModel(model, train, n_epochs, loss_fn, optimizer, device, dates=None):
 
         print(f"Epoch {e}:",
               f"Avg loss={train_loss/len(train):.4f},",
-              f"Accuracy={(100*correct/len(train.dataset)):.1f}%,",
-              f"F1={f1.mean():.3f} (per class {f1[0]:.2f}, {f1[1]:.2f})")
+              f"Accuracy={(100*correct/len(train.dataset)):.3f}%,",
+              f"F1={f1.mean()*100:.3f} (per class {f1[0]*100:.3f}, {f1[1]*100:.3f})")
 
         # f1_valid = prediction(model, valid, device)
         # if f1_valid > best_validation:
@@ -102,8 +102,8 @@ def testModel(model, test, loss_fn, device, dates=None):
 
     print(f"\nTest Error:",
           f"Avg loss={test_loss/len(test):.4f},",
-          f"Accuracy={(100*correct/len(test.dataset)):.1f}%,",
-          f"F1={f1.mean():.3f} (per class {f1[0]:.3f}, {f1[1]:.3f})")
+          f"Accuracy={(100*correct/len(test.dataset)):.3f}%,",
+          f"F1={f1.mean()*100:.3f} (per class {f1[0]*100:.3f}, {f1[1]*100:.3f})")
 
     return pred_all
 
@@ -164,8 +164,8 @@ def trainTestModel(model_name,file_path, x_train,x_test,y_train,y_test,dates_tra
         f1 = f1_score(y_pred, y_test, average=None)
         accuracy = accuracy_score(y_pred, y_test)
 
-        print(f"\nAccuracy={(100*accuracy):.1f}%,",
-                f"F1={f1.mean():.3f} (per class {f1[0]:.2f}, {f1[1]:.2f})")         
+        print(f"\nAccuracy={(100*accuracy):.3f}%,",
+                f"F1={f1.mean()*100:.3f} (per class {f1[0]*100:.3f}, {f1[1]*100:.3f})")         
     else:    
         y_pred = testModel(model, test_dataloader, loss, device, dates_test)
 
@@ -175,6 +175,7 @@ def main(argv):
     year = int(argv[1]) if len(argv) > 1 else 2018
     model_name = argv[2] if len(argv) > 2 else "MLP"
 
+    grid_mean = True # whether or not to use grid mean corrected VV and VH data
     n_epochs = 50
 
     torch.manual_seed(0)
@@ -185,6 +186,9 @@ def main(argv):
 
     dates = dataset["dates_SAR"]
 
+    if not grid_mean:
+        X_SAR = X_SAR[:, :, (0, 2)]  # Remove VV-grid_mean and VH-grid_mean
+
     # Pre-process labels: binarize with "CZH" as positive class
     y = np.zeros(y_multi.shape)
     y[y_multi == "CZH"] = 1
@@ -192,7 +196,8 @@ def main(argv):
     # Train-test split
     indices = np.arange(y.shape[0])
     batch_size = 16
-    train_size = int(batch_size * round(0.1 * X_SAR.shape[0] / batch_size))
+    ratio = 0.7 # train / (train + test)
+    train_size = int(batch_size * round(ratio * X_SAR.shape[0] / batch_size))
     X_SAR_train, X_SAR_test, X_NDVI_train, X_NDVI_test, y_train, y_test, idx_train, idx_test = train_test_split(
         X_SAR, X_NDVI, y, indices, train_size=train_size, random_state=42)
 
