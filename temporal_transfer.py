@@ -14,11 +14,9 @@ from sklearn.ensemble import RandomForestClassifier
 
 import matplotlib.pyplot as plt
 
-from model import MLP, TempCNN, Inception, LSTMFCN, LTAE_clf
-
 from sklearn import metrics
 
-from main import trainTestModel, trainModel, testModel
+from main import trainTestModel
 
 
 def main(argv):
@@ -28,9 +26,10 @@ def main(argv):
         year_train, year_test = 2018, 2020
 
     model_name = argv[3] if len(argv) > 3 else "MLP"
+    show_plots = False if len(argv) > 4 else True
 
     grid_mean = True # whether or not to use grid mean corrected VV and VH data
-    n_epochs = 50
+    n_epochs = 100
 
     torch.manual_seed(0)
     # np.random.seed(0)
@@ -55,13 +54,21 @@ def main(argv):
     # 2019: SAR (72506, 135, 4), NDVI (72506, 80)
     # 2020: SAR (97971, 150, 4), NDVI (97971, 71)
     if model_name != 'LTAE':
-        diff = X_SAR_train.shape[1] - X_SAR_test.shape[1]
+        # Downsize to smaller year between train and test
+        # diff = X_SAR_train.shape[1] - X_SAR_test.shape[1]
+        # if diff > 0:
+        #     X_SAR_train = X_SAR_train[:, (diff//2):-(diff-diff//2), :]
+        # elif diff < 0:
+        #     X_SAR_test = X_SAR_test[:, -(diff//2):(diff-diff//2), :]
+
+        # Downsize always to 135 (i.e, smallest year overall) for full compatibily
+        diff = X_SAR_train.shape[1] - 135
         if diff > 0:
             X_SAR_train = X_SAR_train[:, (diff//2):-(diff-diff//2), :]
-        elif diff < 0:
-            X_SAR_test = X_SAR_test[:, -(diff//2):(diff-diff//2), :]
-    # if model_name != 'LTAE':
-    #     X_SAR_train = X_SAR_train[:, 1:-1, :]  # to match test data size
+        diff = X_SAR_test.shape[1] - 135
+        if diff > 0:
+            X_SAR_test = X_SAR_test[:, (diff//2):-(diff-diff//2), :]
+
     if not grid_mean:
         X_SAR_train = X_SAR_train[:, :, (0, 2)]  # Remove VV-grid_mean and VH-grid_meanx
     # Pre_process data: rescale
@@ -96,15 +103,16 @@ def main(argv):
     y_pred = trainTestModel(model_name,file_path,x_train,x_test,y_train,y_test,dates_SAR_train,dates_SAR_test,n_epochs)
 
     # Metrics
-    cm = metrics.confusion_matrix(y_test, y_pred)
-    cm_normalized = cm.astype(float) / cm.sum(axis=1)[:, np.newaxis]
-    metrics.ConfusionMatrixDisplay(
-        confusion_matrix=cm_normalized, display_labels=[False, True]).plot()
-    plt.show()
-    # False positive breakdown
-    false_pos = y_multi_test[(y_pred == True) & (y_multi_test != 'CZH')]
-    pd.Series(false_pos).value_counts(sort=True).plot(kind='bar')
-    plt.title(f'Distribution of false positives (total of {len(false_pos)})')
+    if show_plots:
+        cm = metrics.confusion_matrix(y_test, y_pred)
+        cm_normalized = cm.astype(float) / cm.sum(axis=1)[:, np.newaxis]
+        metrics.ConfusionMatrixDisplay(
+            confusion_matrix=cm_normalized, display_labels=[False, True]).plot()
+        plt.show()
+        # False positive breakdown
+        false_pos = y_multi_test[(y_pred == True) & (y_multi_test != 'CZH')]
+        pd.Series(false_pos).value_counts(sort=True).plot(kind='bar')
+        plt.title(f'Distribution of false positives (total of {len(false_pos)})')
 
     # print( model.parameters() )
     # exit()
