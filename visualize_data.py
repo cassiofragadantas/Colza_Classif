@@ -14,6 +14,7 @@ def main():
 
     years = [2018, 2019, 2020]
     titles_SAR = ['VV', 'VV-grid', 'VH', 'VH-grid']
+    dB = False # Visualize in dB
 
     path = "results/visualize_data"
     if not os.path.exists(path):
@@ -22,6 +23,10 @@ def main():
     for year in years:
         dataset=np.load(f'Colza_DB/Colza_data_{year}.npz', allow_pickle=True)
         X_SAR, X_NDVI, y_multi, id_p=dataset["X_SAR"], dataset["X_NDVI"], dataset["y"], dataset["id_parcels"]
+        if dB:
+            X_SAR = 10*np.log10(X_SAR)
+            X_NDVI = 10*np.log10(X_NDVI)
+
         dates_SAR = pd.to_datetime(dataset["dates_SAR"]) - pd.DateOffset(years=year-2018)
         dates_NDVI = pd.to_datetime(dataset["dates_NDVI"]) - pd.DateOffset(years=year-2018)
 

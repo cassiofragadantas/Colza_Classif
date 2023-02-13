@@ -12,6 +12,8 @@ import torch.nn.functional as F
 from sklearn.metrics import f1_score, accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
+from matplotlib.ticker import PercentFormatter
+import seaborn as sns
 
 
 import matplotlib.pyplot as plt
@@ -38,7 +40,7 @@ def trainModel(model, train, n_epochs, loss_fn, optimizer, device, dates=None):
                 pred = model(x_batch, dates)
             else:
                 pred = model(x_batch)
-            
+
             loss = loss_fn(pred.squeeze(), y_batch)
 
             # Backpropagation
@@ -108,7 +110,8 @@ def testModel(model, test, loss_fn, device, dates=None):
 
     return pred_all
 
-def trainTestModel(model_name,file_path, x_train,x_test,y_train,y_test,dates_train, dates_test=None, n_epochs=50, batch_size=16):
+
+def trainTestModel(model_name, file_path, x_train, x_test, y_train, y_test, dates_train, dates_test=None, n_epochs=50, batch_size=16):
     n_classes = 2
 
     if dates_test is None:
@@ -135,7 +138,7 @@ def trainTestModel(model_name,file_path, x_train,x_test,y_train,y_test,dates_tra
     elif model_name == 'LTAE':
         model = LTAE_clf(x_train.shape, n_classes, dates=dates_train)
     elif model_name == 'RF':
-        model = RandomForestClassifier() # n_estimators=1000
+        model = RandomForestClassifier()  # n_estimators=1000
 
     # loss = nn.BCELoss().to(device)  # requires y_train as Float not Long
     loss = nn.CrossEntropyLoss().to(device)
@@ -145,17 +148,19 @@ def trainTestModel(model_name,file_path, x_train,x_test,y_train,y_test,dates_tra
         print(f'\n>> Training {model_name} model.\n')
         start_time = time.time()
         if model_name == 'RF':
-            model.fit(x_train.reshape(x_train.shape[0],-1), y_train)
+            model.fit(x_train.reshape(x_train.shape[0], -1), y_train)
             pickle.dump(model, open(file_path, "wb"))
         else:
-            model.to(device)            
-            optimizer = torch.optim.Adam(model.parameters(), lr=1e-5, weight_decay=1e-6)
-            trainModel(model, train_dataloader, n_epochs, loss, optimizer, device, dates_train)
+            model.to(device)
+            optimizer = torch.optim.Adam(
+                model.parameters(), lr=1e-5, weight_decay=1e-6)
+            trainModel(model, train_dataloader, n_epochs,
+                       loss, optimizer, device, dates_train)
             torch.save(model.state_dict(), file_path)
         print(f'\nTraining time = {time.time()-start_time:.2f} seconds')
     else:
         print(f'\n>> Loading previously-learned {model_name} model weights.\n')
-        if model_name == 'RF': 
+        if model_name == 'RF':
             model = pickle.load(open(file_path, "rb"))
         else:
             model.load_state_dict(torch.load(file_path, map_location=device))
@@ -164,26 +169,62 @@ def trainTestModel(model_name,file_path, x_train,x_test,y_train,y_test,dates_tra
     # Test model
     start_time = time.time()
     if model_name == 'RF':
-        y_pred = model.predict(x_test.reshape(x_test.shape[0],-1))
+        y_pred = model.predict(x_test.reshape(x_test.shape[0], -1))
         f1 = f1_score(y_pred, y_test, average=None)
         accuracy = accuracy_score(y_pred, y_test)
 
         print(f"\nAccuracy={(100*accuracy):.3f}%,",
-                f"F1={f1.mean()*100:.3f} (per class {f1[0]*100:.3f}, {f1[1]*100:.3f})")         
-    else:    
+              f"F1={f1.mean()*100:.3f} (per class {f1[0]*100:.3f}, {f1[1]*100:.3f})")
+    else:
         y_pred = testModel(model, test_dataloader, loss, device, dates_test)
     print(f'\nTesting time = {time.time()-start_time:.2f} seconds')
 
-
     return y_pred
+
+
+def plotMetrics(y_test, y_multi_test, y_pred,path,filename):
+    cm = metrics.confusion_matrix(y_test, y_pred)
+    cm_normalized = cm.astype(float) / cm.sum(axis=1)[:, np.newaxis]
+    # metrics.ConfusionMatrixDisplay(
+    #     confusion_matrix=cm_normalized, display_labels=[False, True]).plot()
+    plotFullConfusionMatrix(cm, cm_normalized,path,filename)
+    plt.show()
+    # False positive breakdown
+    false_pos = y_multi_test[(y_pred == True) & (y_multi_test != 'CZH')]
+    pd.Series(false_pos).value_counts(sort=True).plot(kind='bar')
+    plt.title(f'Distribution of false positives (total of {len(false_pos)})')
+
+
+def plotFullConfusionMatrix(cm, cm_norm, path, filename, figsize=(2.1, 2.1)):
+    classes = ['False', 'True']
+    annot = np.empty_like(cm).astype(str)
+    nrows, ncols = cm.shape
+    for i in range(nrows):
+        for j in range(ncols):
+            annot[i, j] = '%.1f%%\n(%d)' % (cm_norm[i, j]*100, cm[i, j])
+    cm_norm = pd.DataFrame(cm_norm)
+    cm_norm = cm_norm * 100
+    cm_norm.index.name = 'True label'
+    cm_norm.columns.name = 'Predicted label'
+    _, ax = plt.subplots(figsize=figsize)
+    plt.yticks(va='center')
+    # plt.title(title)
+
+    sns.heatmap(cm_norm, annot=annot, fmt='', ax=ax, xticklabels=classes, cbar=False,
+                cbar_kws={'format': PercentFormatter()}, yticklabels=classes, cmap="Blues")
+
+    # Save figure
+    if not os.path.exists(path):
+        os.makedirs(path)
+    plt.savefig(path+filename, bbox_inches="tight")
+
 
 def main(argv):
     year = int(argv[1]) if len(argv) > 1 else 2018
     model_name = argv[2] if len(argv) > 2 else "MLP"
     show_plots = False if len(argv) > 3 else True
 
-
-    grid_mean = True # whether or not to use grid mean corrected VV and VH data
+    grid_mean = True  # whether or not to use grid mean corrected VV and VH data
     n_epochs = 100
 
     torch.manual_seed(0)
@@ -204,7 +245,7 @@ def main(argv):
     # Train-test split
     indices = np.arange(y.shape[0])
     batch_size = 16
-    ratio = 0.7 # train / (train + test)
+    ratio = 0.7  # train / (train + test)
     train_size = int(batch_size * round(ratio * X_SAR.shape[0] / batch_size))
     X_SAR_train, X_SAR_test, X_NDVI_train, X_NDVI_test, y_train, y_test, idx_train, idx_test = train_test_split(
         X_SAR, X_NDVI, y, indices, train_size=train_size, random_state=42)
@@ -218,24 +259,18 @@ def main(argv):
     # y_test = F.one_hot(y_test, num_classes=n_classes).float()
 
     # Permute channel and time dimensions
-    x_train = x_train.permute((0,2,1))
-    x_test = x_test.permute((0,2,1))
+    x_train = x_train.permute((0, 2, 1))
+    x_test = x_test.permute((0, 2, 1))
 
-    file_path = "model_weights/" + model_name + f'_SAR_{year}part_{n_epochs}ep_{x_train.shape[-2]}ch'
-    y_pred = trainTestModel(model_name,file_path,x_train,x_test,y_train,y_test,dates,dates,n_epochs,batch_size)
+    path = "model_weights/"
+    filename = model_name+f'_SAR_{year}part_{n_epochs}ep_{x_train.shape[-2]}ch'
+    y_pred = trainTestModel(model_name, path+filename, x_train, x_test,
+                            y_train, y_test, dates, dates, n_epochs, batch_size)
 
     # Metrics
     if show_plots:
-        cm = metrics.confusion_matrix(y_test, y_pred)
-        cm_normalized = cm.astype(float) / cm.sum(axis=1)[:, np.newaxis]
-        metrics.ConfusionMatrixDisplay(
-            confusion_matrix=cm_normalized, display_labels=[False, True]).plot()
-        plt.show()
-        # False positive breakdown
-        y_test_multi = y_multi[idx_test]
-        false_pos = y_test_multi[(y_pred == True) & (y_test_multi != 'CZH')]
-        pd.Series(false_pos).value_counts(sort=True).plot(kind='bar')
-        plt.title(f'Distribution of false positives (total of {len(false_pos)})')
+        path = "results/1_same_year/"
+        plotMetrics(y_test,  y_multi[idx_test], y_pred,path,filename)
 
     # print( model.parameters() )
 

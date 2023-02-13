@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 from sklearn import metrics
 
-from main import trainTestModel
+from main import trainTestModel, plotMetrics
 
 
 def main(argv):
@@ -29,6 +29,7 @@ def main(argv):
     show_plots = False if len(argv) > 4 else True
 
     grid_mean = True # whether or not to use grid mean corrected VV and VH data
+    all_orbits = True # whether or not to merge all orbits for a higher temporal resolution
     n_epochs = 100
 
     torch.manual_seed(0)
@@ -69,6 +70,11 @@ def main(argv):
         if diff > 0:
             X_SAR_test = X_SAR_test[:, (diff//2):-(diff-diff//2), :]
 
+    if not all_orbits:
+        X_SAR_train = X_SAR_train[:,::3,:]
+        X_SAR_test = X_SAR_test[:,::3,:]
+
+
     if not grid_mean:
         X_SAR_train = X_SAR_train[:, :, (0, 2)]  # Remove VV-grid_mean and VH-grid_meanx
     # Pre_process data: rescale
@@ -99,20 +105,17 @@ def main(argv):
     # Permute channel and time dimensions
     x_test = x_test.permute((0,2,1))
 
-    file_path = "model_weights/" + model_name + f'_SAR_{year_train}_{n_epochs}ep_{x_train.shape[-2]}ch'
-    y_pred = trainTestModel(model_name,file_path,x_train,x_test,y_train,y_test,dates_SAR_train,dates_SAR_test,n_epochs)
+    # Train and test model
+    path = "model_weights/"
+    filename = model_name + f'_SAR_{year_train}_{n_epochs}ep_{x_train.shape[-2]}ch'
+    if not all_orbits:
+        filename = filename + '_singleOrb'
+    y_pred = trainTestModel(model_name,path+filename,x_train,x_test,y_train,y_test,dates_SAR_train,dates_SAR_test,n_epochs)
 
     # Metrics
     if show_plots:
-        cm = metrics.confusion_matrix(y_test, y_pred)
-        cm_normalized = cm.astype(float) / cm.sum(axis=1)[:, np.newaxis]
-        metrics.ConfusionMatrixDisplay(
-            confusion_matrix=cm_normalized, display_labels=[False, True]).plot()
-        plt.show()
-        # False positive breakdown
-        false_pos = y_multi_test[(y_pred == True) & (y_multi_test != 'CZH')]
-        pd.Series(false_pos).value_counts(sort=True).plot(kind='bar')
-        plt.title(f'Distribution of false positives (total of {len(false_pos)})')
+        path = "results/2_temporal_transfer/"
+        plotMetrics(y_test, y_multi_test, y_pred, path, filename)
 
     # print( model.parameters() )
     # exit()
