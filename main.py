@@ -9,7 +9,7 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 import torch.nn.functional as F
 
-from sklearn.metrics import f1_score, accuracy_score
+from sklearn.metrics import f1_score, accuracy_score, precision_recall_fscore_support, cohen_kappa_score
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from matplotlib.ticker import PercentFormatter
@@ -183,16 +183,25 @@ def trainTestModel(model_name, file_path, x_train, x_test, y_train, y_test, date
 
 
 def plotMetrics(y_test, y_multi_test, y_pred,path,filename):
+    # Precision - recall - F1 and kappa    
+    precision, recall, f1, _ = precision_recall_fscore_support(y_test,y_pred)
+    kappa = cohen_kappa_score(y_test, y_pred)
+    print(f"\nPrecision={100*precision[1]:.3f}%,",
+        f"Recall={100*recall[1]:.3f}%, Kappa={kappa:.4f}")    
+    # Confusion matrix
     cm = metrics.confusion_matrix(y_test, y_pred)
     cm_normalized = cm.astype(float) / cm.sum(axis=1)[:, np.newaxis]
     # metrics.ConfusionMatrixDisplay(
     #     confusion_matrix=cm_normalized, display_labels=[False, True]).plot()
     plotFullConfusionMatrix(cm, cm_normalized,path,filename)
+    print("\nConfusion matrix:")
+    print(f"[TN, FP] = [{cm[0,0]:5d}, {cm[0,1]:5d}]\n[FN, TP]   [{cm[1,0]:5d}, {cm[1,1]:5d}]") #{' ':.5s}
     plt.show()
     # False positive breakdown
     false_pos = y_multi_test[(y_pred == True) & (y_multi_test != 'CZH')]
     pd.Series(false_pos).value_counts(sort=True).plot(kind='bar')
     plt.title(f'Distribution of false positives (total of {len(false_pos)})')
+    plt.show()
 
 
 def plotFullConfusionMatrix(cm, cm_norm, path, filename, figsize=(2.1, 2.1)):
@@ -224,11 +233,13 @@ def main(argv):
     model_name = argv[2] if len(argv) > 2 else "MLP"
     show_plots = False if len(argv) > 3 else True
 
+    rng_seed = 42
     grid_mean = True  # whether or not to use grid mean corrected VV and VH data
     n_epochs = 100
 
-    torch.manual_seed(0)
-    # np.random.seed(0)
+    print(f'(Random seed set to {rng_seed})')
+    torch.manual_seed(rng_seed)
+    np.random.seed(rng_seed)
 
     dataset = np.load(f'Colza_DB/Colza_data_{year}.npz', allow_pickle=True)
     X_SAR, X_NDVI, y_multi, id_parcel = dataset["X_SAR"], dataset["X_NDVI"], dataset["y"], dataset["id_parcels"]
@@ -248,7 +259,7 @@ def main(argv):
     ratio = 0.7  # train / (train + test)
     train_size = int(batch_size * round(ratio * X_SAR.shape[0] / batch_size))
     X_SAR_train, X_SAR_test, X_NDVI_train, X_NDVI_test, y_train, y_test, idx_train, idx_test = train_test_split(
-        X_SAR, X_NDVI, y, indices, train_size=train_size, random_state=42)
+        X_SAR, X_NDVI, y, indices, train_size=train_size, random_state=rng_seed)
 
     x_train = torch.Tensor(X_SAR_train)
     y_train = torch.Tensor(y_train).long()

@@ -78,10 +78,10 @@ def main():
         # colza_norm = colza_np/np.sqrt((colza_np * colza_np).sum(axis=1))[:,np.newaxis] # normalize rows
         # cov_mtx = colza_norm.dot(colza_norm.T)
 
-        # Acquisition Dates
+        # Acquisition Dates - NDVI
         plt.figure(6, figsize=(6,1))
         ax = plt.subplot(1,1,1)
-        plt.title('Acquisition dates')
+        plt.title('Acquisition dates - NDVI')
         ax.scatter(dates_NDVI, [0.5*(year-2017)]*len(dates_NDVI), marker='o', s=30, alpha=0.5)
         ax.xaxis.set_major_formatter(DateFormatter("%b"))
         ax.yaxis.set_visible(False)
@@ -90,7 +90,21 @@ def main():
         ax.spines['top'].set_visible(False)
         ax.xaxis.set_ticks_position('bottom')
         ax.get_yaxis().set_ticklabels([])
-        plt.savefig(f'{path}/Acquisition_dates.pdf', bbox_inches = "tight")
+        plt.savefig(f'{path}/Acquisition_dates_NDVI.pdf', bbox_inches = "tight")
+
+        # Acquisition Dates - SAR
+        plt.figure(7, figsize=(6,1))
+        ax = plt.subplot(1,1,1)
+        plt.title('Acquisition dates - SAR')
+        ax.scatter(dates_SAR, [0.5*(year-2017)]*len(dates_SAR), marker='o', s=30, alpha=0.5)
+        ax.xaxis.set_major_formatter(DateFormatter("%b"))
+        ax.yaxis.set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.xaxis.set_ticks_position('bottom')
+        ax.get_yaxis().set_ticklabels([])
+        plt.savefig(f'{path}/Acquisition_dates_SAR.pdf', bbox_inches = "tight")
 
 if __name__ == "__main__":
     main()

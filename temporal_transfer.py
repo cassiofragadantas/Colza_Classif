@@ -1,20 +1,6 @@
-import os
 import sys
-import pickle
 import numpy as np
-import pandas as pd
 import torch
-import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
-import torch.nn.functional as F
-
-from sklearn.metrics import f1_score, accuracy_score
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-
-import matplotlib.pyplot as plt
-
-from sklearn import metrics
 
 from main import trainTestModel, plotMetrics
 
@@ -26,14 +12,17 @@ def main(argv):
         year_train, year_test = 2018, 2020
 
     model_name = argv[3] if len(argv) > 3 else "MLP"
+    rng_seed = int(argv[3]) if len(argv) > 4 else 42
     show_plots = False if len(argv) > 4 else True
 
     grid_mean = True # whether or not to use grid mean corrected VV and VH data
     all_orbits = True # whether or not to merge all orbits for a higher temporal resolution
     n_epochs = 100
 
-    torch.manual_seed(0)
-    # np.random.seed(0)
+    print(f'(Random seed set to {rng_seed})')
+    torch.manual_seed(rng_seed)
+    np.random.seed(rng_seed)
+
 
     # Training data
     dataset = np.load(
@@ -107,7 +96,7 @@ def main(argv):
 
     # Train and test model
     path = "model_weights/"
-    filename = model_name + f'_SAR_{year_train}_{n_epochs}ep_{x_train.shape[-2]}ch'
+    filename = model_name + f'_SAR_{year_train}_{n_epochs}ep_{x_train.shape[-2]}ch_seed{rng_seed}'
     if not all_orbits:
         filename = filename + '_singleOrb'
     y_pred = trainTestModel(model_name,path+filename,x_train,x_test,y_train,y_test,dates_SAR_train,dates_SAR_test,n_epochs)
