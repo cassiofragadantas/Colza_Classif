@@ -12,7 +12,7 @@ def main(argv):
         year_train, year_test = 2018, 2020
 
     model_name = argv[3] if len(argv) > 3 else "MLP"
-    rng_seed = int(argv[3]) if len(argv) > 4 else 42
+    rng_seed = int(argv[4]) if len(argv) > 4 else 42
     show_plots = False if len(argv) > 4 else True
 
     grid_mean = True # whether or not to use grid mean corrected VV and VH data
