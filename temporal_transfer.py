@@ -14,6 +14,7 @@ def main(argv):
     model_name = argv[3] if len(argv) > 3 else "MLP"
     rng_seed = int(argv[4]) if len(argv) > 4 else 42
     show_plots = False if len(argv) > 4 else True
+    add_shift = int(argv[5]) if len(argv) > 5 else 0 # forces a time shift of 'add_shift' entries between train and test years
 
     grid_mean = True # whether or not to use grid mean corrected VV and VH data
     all_orbits = True # whether or not to merge all orbits for a higher temporal resolution
@@ -51,13 +52,31 @@ def main(argv):
         # elif diff < 0:
         #     X_SAR_test = X_SAR_test[:, -(diff//2):(diff-diff//2), :]
 
-        # Downsize always to 135 (i.e, smallest year overall) for full compatibily
-        diff = X_SAR_train.shape[1] - 135
-        if diff > 0:
-            X_SAR_train = X_SAR_train[:, (diff//2):-(diff-diff//2), :]
-        diff = X_SAR_test.shape[1] - 135
-        if diff > 0:
-            X_SAR_test = X_SAR_test[:, (diff//2):-(diff-diff//2), :]
+        if add_shift!=0:
+            if (year_train != 2018) or (year_test != 2020):
+                print('Temporal shift experiment is only available for training at 2018 and test at 2020')
+                return
+            if add_shift != 4 and add_shift != 8 and add_shift != 15:
+                print('Shift has to be of 8 or 15 samples. Reseting it to 15.')
+                add_shift = 15
+            if add_shift == 4: # about 7-days shift
+                X_SAR_train = X_SAR_train[:, 12:-5, :]
+                X_SAR_test = X_SAR_test[:, 15:, :]                
+            elif add_shift == 8: # about 15-days shift
+                X_SAR_train = X_SAR_train[:, 8:-9, :]
+                X_SAR_test = X_SAR_test[:, 15:, :]
+            else: # about 30-days shift
+                X_SAR_train = X_SAR_train[:, 2:-15, :]
+                X_SAR_test = X_SAR_test[:, 15:, :]
+        else:
+            # Downsize always to 135 (i.e, smallest year overall) for full compatibily
+            diff = X_SAR_train.shape[1] - 135
+            if diff > 0:
+                X_SAR_train = X_SAR_train[:, (diff//2):-(diff-diff//2), :]
+            diff = X_SAR_test.shape[1] - 135
+            if diff > 0:
+                X_SAR_test = X_SAR_test[:, (diff//2):-(diff-diff//2), :]
+
 
     if not all_orbits:
         X_SAR_train = X_SAR_train[:,::3,:]
@@ -82,7 +101,7 @@ def main(argv):
     # Pre_process data: rescaling
     if not grid_mean:
         X_SAR_test = X_SAR_test[:, :, (0, 2)]  # Remove VV-grid_mean and VH-grid_meanx    
-    x_test = X_SAR_test/np.percentile(X_SAR_test, 98)
+    x_test = X_SAR_test/np.percentile(X_SAR_test, 99)
     x_test[x_test > 1] = 1
     x_test = torch.Tensor(x_test)  # transform to torch tensor
     # Pre-process labels: binarize with "CZH" as positive class
@@ -99,6 +118,8 @@ def main(argv):
     filename = model_name + f'_SAR_{year_train}_{n_epochs}ep_{x_train.shape[-2]}ch_seed{rng_seed}'
     if not all_orbits:
         filename = filename + '_singleOrb'
+    if add_shift != 0:
+        filename = filename + f'_shift{add_shift}'
     y_pred = trainTestModel(model_name,path+filename,x_train,x_test,y_train,y_test,dates_SAR_train,dates_SAR_test,n_epochs)
 
     # Metrics

@@ -178,24 +178,25 @@ def trainTestModel(model_name, file_path, x_train, x_test, y_train, y_test, date
     else:
         y_pred = testModel(model, test_dataloader, loss, device, dates_test)
     print(f'\nTesting time = {time.time()-start_time:.2f} seconds')
+    # Precision - recall -  kappa - confusion matrix
+    precision, recall, f1, _ = precision_recall_fscore_support(y_test,y_pred)
+    kappa = cohen_kappa_score(y_test, y_pred)
+    print(f"\nPrecision={100*precision[1]:.3f}%,",
+        f"Recall={100*recall[1]:.3f}%, Kappa={kappa:.4f}")
+    cm = metrics.confusion_matrix(y_test, y_pred)
+    print("\nConfusion matrix:")
+    print(f"[TN, FP] = [{cm[0,0]:5d}, {cm[0,1]:5d}]\n[FN, TP]   [{cm[1,0]:5d}, {cm[1,1]:5d}]") #{' ':.5s}  
 
     return y_pred
 
 
 def plotMetrics(y_test, y_multi_test, y_pred,path,filename):
-    # Precision - recall - F1 and kappa    
-    precision, recall, f1, _ = precision_recall_fscore_support(y_test,y_pred)
-    kappa = cohen_kappa_score(y_test, y_pred)
-    print(f"\nPrecision={100*precision[1]:.3f}%,",
-        f"Recall={100*recall[1]:.3f}%, Kappa={kappa:.4f}")    
     # Confusion matrix
     cm = metrics.confusion_matrix(y_test, y_pred)
     cm_normalized = cm.astype(float) / cm.sum(axis=1)[:, np.newaxis]
     # metrics.ConfusionMatrixDisplay(
     #     confusion_matrix=cm_normalized, display_labels=[False, True]).plot()
     plotFullConfusionMatrix(cm, cm_normalized,path,filename)
-    print("\nConfusion matrix:")
-    print(f"[TN, FP] = [{cm[0,0]:5d}, {cm[0,1]:5d}]\n[FN, TP]   [{cm[1,0]:5d}, {cm[1,1]:5d}]") #{' ':.5s}
     plt.show()
     # False positive breakdown
     false_pos = y_multi_test[(y_pred == True) & (y_multi_test != 'CZH')]
