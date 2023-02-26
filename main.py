@@ -182,7 +182,12 @@ def trainTestModel(model_name, file_path, x_train, x_test, y_train, y_test, date
     precision, recall, f1, _ = precision_recall_fscore_support(y_test,y_pred)
     kappa = cohen_kappa_score(y_test, y_pred)
     print(f"\nPrecision={100*precision[1]:.3f}%,",
-        f"Recall={100*recall[1]:.3f}%, Kappa={kappa:.4f}")
+        f"Recall={100*recall[1]:.3f}%, Kappa={kappa:.4f}") # Positive class only - standard
+    print(f"\nOther (non-standard for binary classif):")        
+    print(f"Non-colza: Precision={100*precision[0]:.3f}%,",
+        f"Recall={100*recall[0]:.3f}%")
+    print(f"Overall (average): Precision={100*precision.mean():.3f}%,",
+        f"Recall={100*recall.mean():.3f}%")
     cm = metrics.confusion_matrix(y_test, y_pred)
     print("\nConfusion matrix:")
     print(f"[TN, FP] = [{cm[0,0]:5d}, {cm[0,1]:5d}]\n[FN, TP]   [{cm[1,0]:5d}, {cm[1,1]:5d}]") #{' ':.5s}  
