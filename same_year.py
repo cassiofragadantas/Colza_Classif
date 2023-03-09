@@ -4,7 +4,7 @@ import torch
 
 from sklearn.model_selection import train_test_split
 
-from main import trainTestModel, plotMetrics
+from main import trainTestModel, plotMetrics, checkOutliers
 
 # Basically the same code as in main.py, but using different random seeds.
 def main(argv):
@@ -16,6 +16,8 @@ def main(argv):
 
     grid_mean = True  # whether or not to use grid mean corrected VV and VH data
     n_epochs = 100
+
+    check_outliers = False # Show percentage of outliers on false negatives
 
     print(f'(Random seed set to {rng_seed})')
     torch.manual_seed(rng_seed)
@@ -62,6 +64,10 @@ def main(argv):
     if show_plots:
         path = "results/1_same_year/"
         plotMetrics(y_test,  y_multi[idx_test], y_pred,path,filename)
+
+    # Check outliers on false negatives
+    if check_outliers:
+        checkOutliers(y_pred,y_test,idx_test,year)
 
     # print( model.parameters() )
 

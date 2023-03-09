@@ -2,7 +2,7 @@ import sys
 import numpy as np
 import torch
 
-from main import trainTestModel, plotMetrics
+from main import trainTestModel, plotMetrics, checkOutliers, removeOutliers
 
 
 def main(argv):
@@ -15,6 +15,10 @@ def main(argv):
     rng_seed = int(argv[4]) if len(argv) > 4 else 42
     show_plots = False if len(argv) > 4 else True
     add_shift = int(argv[5]) if len(argv) > 5 else 0 # forces a time shift of 'add_shift' entries between train and test years
+    remove_outliers = True if len(argv) > 6 and argv[6].lower()=='true' else False # Remove outliers from training and test data
+    check_outliers = True if len(argv) > 7 and argv[7].lower()=='true' else False # Show percentage of outliers on false negatives
+    outlierType = argv[8] if len(argv) > 8 else  'intersect' # Criteria for outlier detection ('VV', 'VH', 'union')
+
 
     grid_mean = True # whether or not to use grid mean corrected VV and VH data
     all_orbits = True # whether or not to merge all orbits for a higher temporal resolution
@@ -39,6 +43,9 @@ def main(argv):
     id_parcel_test, dates_SAR_test, dates_NDVI_test = \
         dataset["id_parcels"], dataset["dates_SAR"], dataset["dates_NDVI"]
 
+    if remove_outliers:
+        X_SAR_train = removeOutliers(X_SAR_train,year_train,outType=outlierType)
+        y_multi_train = removeOutliers(y_multi_train,year_train,outType=outlierType)
 
     # Pre_process data: resize
     # 2018: SAR (80288, 152, 4), NDVI (80288, 78)
@@ -120,12 +127,19 @@ def main(argv):
         filename = filename + '_singleOrb'
     if add_shift != 0:
         filename = filename + f'_shift{add_shift}'
+    if remove_outliers:
+        filename = filename + f'_noOutliers_{outlierType}'
+    print(filename)
     y_pred = trainTestModel(model_name,path+filename,x_train,x_test,y_train,y_test,dates_SAR_train,dates_SAR_test,n_epochs)
 
     # Metrics
     if show_plots:
         path = "results/2_temporal_transfer/"
         plotMetrics(y_test, y_multi_test, y_pred, path, filename)
+
+    # Check outliers on false negatives
+    if check_outliers:
+        checkOutliers(y_pred,y_test,np.arange(len(y_pred)),year_test,outlierType)
 
     # print( model.parameters() )
     # exit()

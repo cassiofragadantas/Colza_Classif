@@ -104,9 +104,9 @@ def testModel(model, test, loss_fn, device, dates=None):
     f1 = f1_score(pred_all, labels, average=None)
 
     print(f"\nTest Error:",
-          f"Avg loss={test_loss/len(test):.4f},",
-          f"Accuracy={(100*correct/len(test.dataset)):.3f}%,",
-          f"F1={f1.mean()*100:.3f} (per class {f1[0]*100:.3f}, {f1[1]*100:.3f})")
+          f"Avg loss={test_loss/len(test):.4f},")
+
+    # printMeasures(pred_all,labels)
 
     return pred_all
 
@@ -170,30 +170,88 @@ def trainTestModel(model_name, file_path, x_train, x_test, y_train, y_test, date
     start_time = time.time()
     if model_name == 'RF':
         y_pred = model.predict(x_test.reshape(x_test.shape[0], -1))
-        f1 = f1_score(y_pred, y_test, average=None)
-        accuracy = accuracy_score(y_pred, y_test)
-
-        print(f"\nAccuracy={(100*accuracy):.3f}%,",
-              f"F1={f1.mean()*100:.3f} (per class {f1[0]*100:.3f}, {f1[1]*100:.3f})")
     else:
         y_pred = testModel(model, test_dataloader, loss, device, dates_test)
-    print(f'\nTesting time = {time.time()-start_time:.2f} seconds')
-    # Precision - recall -  kappa - confusion matrix
-    precision, recall, f1, _ = precision_recall_fscore_support(y_test,y_pred)
-    kappa = cohen_kappa_score(y_test, y_pred)
-    print(f"\nPrecision={100*precision[1]:.3f}%,",
-        f"Recall={100*recall[1]:.3f}%, Kappa={kappa:.4f}") # Positive class only - standard
-    print(f"\nOther (non-standard for binary classif):")        
-    print(f"Non-colza: Precision={100*precision[0]:.3f}%,",
-        f"Recall={100*recall[0]:.3f}%")
-    print(f"Overall (average): Precision={100*precision.mean():.3f}%,",
-        f"Recall={100*recall.mean():.3f}%")
-    cm = metrics.confusion_matrix(y_test, y_pred)
-    print("\nConfusion matrix:")
-    print(f"[TN, FP] = [{cm[0,0]:5d}, {cm[0,1]:5d}]\n[FN, TP]   [{cm[1,0]:5d}, {cm[1,1]:5d}]") #{' ':.5s}  
+    print(f'\nTesting time = {time.time()-start_time:.2f} seconds\n')
+
+    # Performance measures
+    printMeasures(y_pred,y_test)
 
     return y_pred
 
+def printMeasures(y_pred,y_real,verbose=True):
+    # Accuracy - F1
+    accuracy = accuracy_score(y_pred, y_real)
+    f1 = f1_score(y_pred, y_real, average=None)
+    print(f"Accuracy={(100*accuracy):.3f}%,",
+          f"F1={f1.mean()*100:.3f} (per class {f1[0]*100:.3f}, {f1[1]*100:.3f})")
+    # Precision - recall -  kappa - confusion matrix
+    if verbose:
+        precision, recall, f1, _ = precision_recall_fscore_support(y_real,y_pred)
+        kappa = cohen_kappa_score(y_real, y_pred)
+        print(f"Precision={100*precision[1]:.3f}%,",
+            f"Recall={100*recall[1]:.3f}%, Kappa={kappa:.4f}") # Positive class only - standard
+        print(f"\nOther (non-standard for binary classif):")        
+        print(f"Non-colza: Precision={100*precision[0]:.3f}%,",
+            f"Recall={100*recall[0]:.3f}%")
+        print(f"Overall (average): Precision={100*precision.mean():.3f}%,",
+            f"Recall={100*recall.mean():.3f}%")
+        cm = metrics.confusion_matrix(y_real, y_pred)
+        print("\nConfusion matrix:")
+        print(f"[TN, FP] = [{cm[0,0]:5d}, {cm[0,1]:5d}]\n[FN, TP]   [{cm[1,0]:5d}, {cm[1,1]:5d}]") #{' ':.5s}  
+    
+
+def checkOutliers(y_pred,y_test,idx_test,year,outType='intersect'):
+    if not os.path.exists(f'Colza_DB/Outliers_{year}.npz'):
+        raise ValueError('Outliers file is missing. Please run outlier_detection.py first')
+    
+    outliers = np.load(f'Colza_DB/Outliers_{year}.npz')
+
+    FN = (y_pred==False) & (y_test.cpu().detach().numpy()==True) # False negatives
+
+    # Check intersection between false negatives and outliers
+    print('\nOUTLIERS ANALYSIS (positive class):')
+    for outType_k in outliers.files:
+        out = outliers[outType_k][idx_test]
+        corr =  FN & out
+        print(f'{100*corr.sum()/out.sum():.1f}% ({corr.sum()}/{out.sum()}) outliers are false negatives. ' +
+              f'{100*corr.sum()/FN.sum():.1f}% ({corr.sum()}/{FN.sum()}) false negatives are outliers ({outType_k})')
+
+    print('\nPerformance excluding outliers on test:')
+    out = outliers[outType][idx_test]
+    printMeasures(y_pred[~out],y_test[~out])
+
+
+def countOutliers(data,year,idx=None,outType='intersect',verbose=True):
+    if not os.path.exists(f'Colza_DB/Outliers_{year}.npz'):
+        raise ValueError('Outliers file is missing. Please run outlier_detection.py first')
+
+    if idx is None:
+        idx = range(data.shape[0])
+  
+    outliers = np.load(f'Colza_DB/Outliers_{year}.npz')
+    outliers = outliers[outType][idx]
+    if verbose:
+        print(f'\nTotal of {outliers.sum()} outliers found in the training data.')
+    return outliers.sum()
+
+def removeOutliers(data,year,idx=None,outType='intersect',returnIdx=False):
+    #TODO should return new idx after removals, otherwise doesn't work idx different from whole dataset
+    if not os.path.exists(f'Colza_DB/Outliers_{year}.npz'):
+        raise ValueError('Outliers file is missing. Please run outlier_detection.py first')
+
+    if idx is None:
+        idx = range(data.shape[0])
+
+    outliers = np.load(f'Colza_DB/Outliers_{year}.npz')
+    outliersIdx = outliers[outType][idx]
+
+    if returnIdx:
+        rejectedIdx = np.full(len(outliers[outType]), False)
+        rejectedIdx[idx] = outliersIdx
+        return data[~outliersIdx], rejectedIdx
+    else:
+        return data[~outliersIdx]
 
 def plotMetrics(y_test, y_multi_test, y_pred,path,filename):
     # Confusion matrix
