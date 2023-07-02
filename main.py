@@ -145,7 +145,7 @@ def trainTestModel(model_name, file_path, x_train, x_test, y_train, y_test, date
 
     # Train model (if not previously done)
     if not os.path.exists(file_path):
-        print(f'\n>> Training {model_name} model.\n')
+        print(f'\n>> Training {model_name} model on {device}.\n')
         start_time = time.time()
         if model_name == 'RF':
             model.fit(x_train.reshape(x_train.shape[0], -1), y_train)

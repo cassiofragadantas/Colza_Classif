@@ -20,7 +20,7 @@ def main(argv):
     outlierType = argv[8] if len(argv) > 8 else  'intersect' # Criteria for outlier detection ('VV', 'VH', 'union')
 
 
-    grid_mean = True # whether or not to use grid mean corrected VV and VH data
+    grid_mean = False # whether or not to use grid mean corrected VV and VH data
     all_orbits = True # whether or not to merge all orbits for a higher temporal resolution
     n_epochs = 100
 

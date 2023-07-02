@@ -19,7 +19,7 @@ def main(argv):
 
     train_sizes = [100, 300, 500, 1000]
 
-    grid_mean = True  # whether or not to use grid mean corrected VV and VH data
+    grid_mean = False  # whether or not to use grid mean corrected VV and VH data
     renormalize = True  # Normalize data to [0, 1] ignoring outliers (1%)
     balanced = False  # train-test sets balanced for class distribution
     n_epochs = 100
@@ -66,7 +66,8 @@ def main(argv):
             y_train, y_test = y[idx_train], y[idx_test]
         else:
             X_SAR_train, X_SAR_test, X_NDVI_train, X_NDVI_test, y_train, y_test, idx_train, idx_test = train_test_split(
-                X_SAR, X_NDVI, y, indices, train_size=train_size, random_state=rng_seed)
+                X_SAR, X_NDVI, y, indices, train_size=train_size, random_state=rng_seed) #stratify=y)
+            print(f'{(y_train==1).sum()} Colza samples on training data')
 
         if remove_outliers:
             n_samples_SAR = X_SAR.shape[0]
