@@ -41,7 +41,7 @@ def trainModel(model, train, n_epochs, loss_fn, optimizer, device, dates=None):
             else:
                 pred = model(x_batch)
 
-            loss = loss_fn(pred.squeeze(), y_batch)
+            loss = loss_fn(pred, y_batch)
 
             # Backpropagation
             loss.backward()
@@ -50,7 +50,7 @@ def trainModel(model, train, n_epochs, loss_fn, optimizer, device, dates=None):
             # Metrics
             train_loss += loss.item()
             labels.append(y_batch.cpu().detach().numpy())
-            if pred.squeeze().ndimension() == 1:  # Binary
+            if pred.shape[1] == 1:  # Binary
                 correct += ((pred > 0.5).squeeze() == y_batch).sum().item()
                 pred_all.append((pred > 0.5).cpu().detach().numpy())
             else:  # One-hot
